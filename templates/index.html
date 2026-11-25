@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Urban Heat Island (UHI) Command Center</title>
+  <script src="https://d3js.org"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+    .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+    .card { background: #1e293b; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    h1, h2 { margin-top: 0; color: #38bdf8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #334155; }
+    .online { color: #4ade80; font-weight: bold; }
+    .offline { color: #f87171; font-weight: bold; }
+    select, button { width: 100%; padding: 10px; margin: 8px 0; border-radius: 5px; border: none; }
+    button { background: #0284c7; color: white; font-weight: bold; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Metropolitan Urban Heat Island (UHI) Monitoring & Mitigation</h1>
+  <div class="grid">
+    <div class="card">
+      <h2>Real-Time Thermal Intensity by Urban Zone (D3.js)</h2>
+      <div id="chart"></div>
+      <h2>Decentralized Sensor Node Health</h2>
+      <table>
+        <thead><tr><th>Node ID</th><th>Zone</th><th>Temp (°C)</th><th>AQI</th><th>Status</th></tr></thead>
+        <tbody id="node-table"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Mobile Hotspot Mitigation App</h2>
+      <select id="zone">
+        <option>Industrial District</option>
+        <option>Downtown Core</option>
+        <option>Highway Junction</option>
+        <option>Central Park</option>
+      </select>
+      <select id="issue">
+        <option>Extreme Asphalt Radiation (>40°C)</option>
+        <option>Poor Air Quality / Smog Trap</option>
+        <option>Lack of Canopy / Shade</option>
+      </select>
+      <select id="action">
+        <option>Activate Municipal Mist Sprayers</option>
+        <option>Dispatch Cool-Pavement Coating Crew</option>
+        <option>Schedule Urban Tree Planting</option>
+      </select>
+      <button onclick="submitReport()">Submit Hotspot & Dispatch Mitigation</button>
+      <h3>Recent Field Reports</h3>
+      <ul id="reports-list"></ul>
+    </div>
+  </div>
+  <script>
+    const width = 620, height = 260, margin = {top: 20, right: 20, bottom: 40, left: 45};
+    const svg = d3.select("#chart").append("svg").attr("width", width).attr("height", height);
+    function updateDashboard() {
+      fetch("/api/telemetry").then(res => res.json()).then(data => {
+        const nodes = data.nodes;
+        svg.selectAll("*").remove();
+        const x = d3.scaleBand().domain(nodes.map(d => d.zone)).range([margin.left, width - margin.right]).padding(0.3);
+        const y = d3.scaleLinear().domain().range([height - margin.bottom, margin.top]);
+        const color = d3.scaleLinear().domain().range(["#38bdf8", "#facc15", "#ef4444"]);
+        svg.append("g").attr("transform", `translate(0,${height - margin.bottom})`).call(d3.axisBottom(x));
+        svg.append("g").attr("transform", `translate(${margin.left},0)`).call(d3.axisLeft(y));
+        svg.selectAll("rect").data(nodes).enter().append("rect")
+          .attr("x", d => x(d.zone)).attr("y", d => y(d.temperature))
+          .attr("width", x.bandwidth()).attr("height", d => height - margin.bottom - y(d.temperature))
+          .attr("fill", d => color(d.temperature));
+        document.getElementById("node-table").innerHTML = nodes.map(n => `
+          <tr><td>${n.node_id}</td><td>${n.zone}</td><td>${n.temperature}°C</td><td>${n.aqi}</td>
+          <td class="${n.status === 'ONLINE' ? 'online' : 'offline'}">${n.status}</td></tr>`).join("");
+        document.getElementById("reports-list").innerHTML = data.reports.map(r => `<li><b>${r.zone}</b>: ${r.issue} → <i>${r.action}</i> (${r.timestamp})</li>`).join("");
+      });
+    }
+    function submitReport() {
+      fetch("/api/report_hotspot", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          zone: document.getElementById("zone").value,
+          issue: document.getElementById("issue").value,
+          action: document.getElementById("action").value
+        })
+      }).then(() => updateDashboard());
+    }
+    setInterval(updateDashboard, 2500);
+    updateDashboard();
+  </script>
+</body>
+</html>
